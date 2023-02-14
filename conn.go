@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,8 +14,10 @@ var ctx = context.Background()
 // Conn -
 type Conn struct {
 	cn           *pgx.Conn
+	fn           func(*pglogrepl.InsertMessage)
+	msg          pglogrepl.InsertMessage
 	table, sheme string
-	readSign     bool
+	readHead     bool
 }
 
 // New -
@@ -36,7 +39,9 @@ func New(uri, sheme, table string) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &c, c.cn.QueryRow(ctx, fmt.Sprintf("SELECT '%s.%s'::regclass;", sheme, table)).Scan(nil)
+	return &c, c.cn.QueryRow(
+		ctx, fmt.Sprintf("SELECT '%s.%s'::regclass::INT;", sheme, table),
+	).Scan(&c.msg.RelationID)
 }
 
 // Close -

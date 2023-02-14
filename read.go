@@ -4,75 +4,47 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"log"
+
+	"github.com/jackc/pglogrepl"
 )
 
 var signature = []byte{0x50, 0x47, 0x43, 0x4F, 0x50, 0x59, 0x0A, 0xFF, 0x0D, 0x0A, 0x00}
 
 // Write - io.Writer
 func (c *Conn) Write(src []byte) (n int, err error) {
-	buf := bytes.NewBuffer(src)
-	n = buf.Len()
-	if !c.readSign {
-
-		if !bytes.Equal(buf.Next(len(signature)), signature) {
+	if !c.readHead {
+		// https://postgrespro.ru/docs/postgresql/14/sql-copy#id-1.9.3.55.9.4.5
+		// Заголовок файла содержит 15 байт фиксированных полей, за которыми следует область
+		// расширения заголовка переменной длины. Фиксированные поля:
+		// Сигнатура
+		//		Последовательность из 11 байт PGCOPY\n\377\r\n\0
+		// Поле флагов 32 бит
+		// Длина области расширения заголовка 32 бит
+		if !bytes.HasPrefix(signature, signature) {
 			return 0, fmt.Errorf("invalid file signature: %s", signature)
 		}
-		log.Println(readInt32(buf))
-		extension := make([]byte, readInt32(buf))
-
-		if _, err := io.ReadFull(buf, extension); err != nil {
-			return 0, fmt.Errorf("can't read header extension: %v", err)
-		}
-		log.Printf("%s", extension)
-		c.readSign = true
+		src = src[19:]
+		c.readHead = true
 	}
+	c.msg.Tuple = new(pglogrepl.TupleData)
+	// Каждая запись начинается с 16-битного целого числа, определяющего количество полей в записи.
+	c.msg.Tuple.ColumnNum = binary.BigEndian.Uint16(src[:2])
 
-	tupleLen := readInt16(buf)
+	// Окончание файла состоит из 16-битного целого, содержащего -1.
+	// Это позволяет легко отличить его от счётчика полей в записи.
 	// EOF
-	if tupleLen == -1 {
+	if int16(c.msg.Tuple.ColumnNum) == -1 {
 		return
 	}
-	// vals := make([]driver.Value, tupleLen)
-	for i := 0; i < int(tupleLen); i++ {
-		colLen := readInt32(buf)
-		log.Println(colLen)
-		// column is nil
-		if colLen == -1 {
-			// vals[i] = nil
-			continue
-		}
-		col := make([]byte, colLen)
-		if _, err := io.ReadFull(buf, col); err != nil {
-			return 0, fmt.Errorf("can't read column %v", err)
-		}
-		// vals[i], err = decodeColumn(pgtype.BinaryFormatCode, t.field[i].oid, col)
-		// if err != nil {
-		// 	return 0, err
-		// }
-	}
-
+	c.msg.SetType(pglogrepl.MessageTypeInsert)
+	n, err = c.msg.Tuple.Decode(src)
+	c.fn(&c.msg)
 	return
 }
 
-func readInt32(r io.Reader) int32 {
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0
-	}
-	return int32(binary.BigEndian.Uint32(buf[:]))
-}
-
-func readInt16(r io.Reader) int16 {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0
-	}
-	return int16(binary.BigEndian.Uint16(buf[:]))
-}
-
-func (c *Conn) Read(sqlCustom string) error {
-	_, err := c.cn.PgConn().CopyTo(ctx, c, "COPY ("+sqlCustom+") TO STDOUT WITH BINARY;")
+func (c *Conn) Read(sql string, f func(*pglogrepl.InsertMessage)) error {
+	c.msg.SetType(pglogrepl.MessageTypeInsert)
+	c.fn = f
+	_, err := c.cn.PgConn().CopyTo(ctx, c, "COPY ("+sql+") TO STDOUT WITH BINARY;")
 	return err
 }

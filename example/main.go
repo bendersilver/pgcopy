@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/bendersilver/pgcopy"
+	"github.com/jackc/pglogrepl"
 )
 
 func main() {
@@ -12,6 +13,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Fatal(c.Read("SELECT * FROM pb.employee LIMIT 2"))
+	defer c.Close()
+
+	err = c.Read("SELECT * FROM pb._ev", func(im *pglogrepl.InsertMessage) {
+		log.Println(im)
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 }
