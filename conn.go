@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,8 +12,9 @@ var ctx = context.Background()
 
 // Conn -
 type Conn struct {
-	cn *pgx.Conn
-	rm *pglogrepl.RelationMessage
+	cn           *pgx.Conn
+	table, sheme string
+	readSign     bool
 }
 
 // New -
@@ -28,39 +28,15 @@ func New(uri, sheme, table string) (*Conn, error) {
 	param.Add("application_name", "pgcopy")
 	u.RawQuery = param.Encode()
 
-	var c Conn
-
+	c := Conn{
+		sheme: sheme,
+		table: table,
+	}
 	c.cn, err = pgx.Connect(ctx, u.String())
 	if err != nil {
 		return nil, err
 	}
-
-	c.rm = &pglogrepl.RelationMessage{
-		RelationName: table,
-		Namespace:    sheme,
-	}
-
-	err = c.cn.QueryRow(ctx, fmt.Sprintf(`
-			SELECT pa.attrelid, COUNT(*), json_agg(
-				json_build_object(
-					'Name', pa.attname,
-					'DataType', pa.atttypid::INT,
-					'TypeModifier', pa.atttypmod,
-					'Flags', COALESCE(pi.indisprimary, FALSE)::INT
-				) ORDER BY pa.attnum
-			)
-			FROM pg_attribute pa
-			LEFT JOIN pg_index pi ON pa.attrelid = pi.indrelid AND pa.attnum = ANY(pi.indkey) AND pi.indisprimary IS TRUE
-			WHERE pa.attrelid = '%s.%s'::regclass
-				AND pa.attnum > 0
-				AND NOT pa.attisdropped
-			GROUP BY 1;
-	`, sheme, table)).Scan(&c.rm.RelationID, &c.rm.ColumnNum, &c.rm.Columns)
-	if err != nil {
-		return nil, err
-	}
-
-	return &c, nil
+	return &c, c.cn.QueryRow(ctx, fmt.Sprintf("SELECT '%s.%s'::regclass;", sheme, table)).Scan(nil)
 }
 
 // Close -
