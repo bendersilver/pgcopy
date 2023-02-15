@@ -44,6 +44,12 @@ func New(uri, sheme, table string) (*Conn, error) {
 	).Scan(&c.msg.RelationID)
 }
 
+// Exec -
+func (c *Conn) Exec(sql string, args ...any) error {
+	_, err := c.cn.Exec(ctx, sql, args...)
+	return err
+}
+
 // Close -
 func (c *Conn) Close() error {
 	if c.cn != nil {
