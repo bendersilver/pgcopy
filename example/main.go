@@ -1,24 +1,24 @@
 package main
 
 import (
-	"fmt"
+	"database/sql/driver"
 	"log"
 	"os"
 
 	"github.com/bendersilver/pgcopy"
-	"github.com/jackc/pglogrepl"
 )
 
 func main() {
-	c, err := pgcopy.New(os.Getenv("PG_URL"), "pb", "employee")
+	c, err := pgcopy.New(os.Getenv("PG_URL"), "pb", "users")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer c.Close()
 
-	err = c.Read("SELECT * FROM pb._ev", func(im *pglogrepl.InsertMessage) error {
-		log.Println(im)
-		return fmt.Errorf("err")
+	err = c.Read("SELECT * FROM pb.users", func(vals []driver.Value) error {
+		// decodeTuple(im.Tuple)
+		log.Println(vals)
+		return nil
 	})
 	if err != nil {
 		log.Fatal(err)

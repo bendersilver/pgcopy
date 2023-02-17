@@ -2,7 +2,7 @@ package pgcopy
 
 import (
 	"context"
-	"fmt"
+	"database/sql/driver"
 	"net/url"
 
 	"github.com/jackc/pglogrepl"
@@ -14,8 +14,8 @@ var ctx = context.Background()
 // Conn -
 type Conn struct {
 	cn           *pgx.Conn
-	fn           func(*pglogrepl.InsertMessage) error
-	msg          pglogrepl.InsertMessage
+	fn           func([]driver.Value) error
+	msg          *pglogrepl.RelationMessage
 	table, sheme string
 	readHead     bool
 }
@@ -39,9 +39,8 @@ func New(uri, sheme, table string) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &c, c.cn.QueryRow(
-		ctx, fmt.Sprintf("SELECT '%s.%s'::regclass::INT;", sheme, table),
-	).Scan(&c.msg.RelationID)
+	c.msg, err = c.RelationMessage()
+	return &c, err
 }
 
 // Exec -
