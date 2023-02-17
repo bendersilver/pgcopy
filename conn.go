@@ -14,7 +14,7 @@ var ctx = context.Background()
 // Conn -
 type Conn struct {
 	cn           *pgx.Conn
-	fn           func(*pglogrepl.InsertMessage)
+	fn           func(*pglogrepl.InsertMessage) error
 	msg          pglogrepl.InsertMessage
 	table, sheme string
 	readHead     bool

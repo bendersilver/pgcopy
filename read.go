@@ -38,11 +38,13 @@ func (c *Conn) Write(src []byte) (n int, err error) {
 	}
 	c.msg.SetType(pglogrepl.MessageTypeInsert)
 	n, err = c.msg.Tuple.Decode(src)
-	c.fn(&c.msg)
-	return
+	if err != nil {
+		return 0, err
+	}
+	return n, c.fn(&c.msg)
 }
 
-func (c *Conn) Read(sql string, f func(*pglogrepl.InsertMessage)) error {
+func (c *Conn) Read(sql string, f func(*pglogrepl.InsertMessage) error) error {
 	c.msg.SetType(pglogrepl.MessageTypeInsert)
 	c.fn = f
 	_, err := c.cn.PgConn().CopyTo(ctx, c, "COPY ("+sql+") TO STDOUT WITH BINARY;")
