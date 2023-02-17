@@ -39,7 +39,7 @@ func New(uri, sheme, table string) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.msg, err = c.RelationMessage()
+	c.msg, err = c.relationMessage()
 	return &c, err
 }
 

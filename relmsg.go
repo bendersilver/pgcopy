@@ -7,7 +7,11 @@ import (
 )
 
 // RelationMessage -
-func (c *Conn) RelationMessage() (*pglogrepl.RelationMessage, error) {
+func (c *Conn) RelationMessage() *pglogrepl.RelationMessage {
+	return c.msg
+}
+
+func (c *Conn) relationMessage() (*pglogrepl.RelationMessage, error) {
 	msg := pglogrepl.RelationMessage{
 		RelationName: c.table,
 		Namespace:    c.sheme,
